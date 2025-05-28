@@ -1,0 +1,64 @@
+- name: My Arch Linux
+  hosts: 127.0.0.1
+  connection: local
+  tasks:
+
+    - name: Set timezone and sync to hardware clock
+      block:
+        - ansible.builtin.file:
+            src: /usr/share/zoneinfo/Europe/Berlin
+            dest: /etc/localtime
+            state: link
+        - ansible.builtin.command: hwclock --systohc
+          changed_when: false
+    
+    - name: Enable en_US.UTF-8 locale and language
+      block:
+        - name: Enabling 'en_US.UTF-8 UTF-8' locale
+          ansible.builtin.lineinfile:
+            path: /etc/locale.gen
+            line: 'en_US.UTF-8 UTF-8'
+        - ansible.builtin.copy:
+            dest: /etc/locale.conf
+            content: "LANG=en_US.UTF-8"
+        - ansible.builtin.command: locale-gen
+          changed_when: false
+        - ansible.builtin.copy:
+            dest: /etc/vconsole.conf
+            content: |
+              KEYMAP=de-latin1
+              FONT=eurlatgr
+        - ansible.builtin.copy:
+            dest: /etc/hostname.conf
+            content: spectre
+    
+    - name: Configure systemd-boot/UEFI
+      block:
+        - name: Gather mount facts
+          ansible.builtin.mount_facts:
+        - name: Set boot UUID
+          ansible.builtin.set_fact:
+            root_uuid: "{{ ansible_mounts | selectattr('mount', 'equalto', '/') | map(attribute='uuid') | first }}"
+        - ansible.builtin.copy:
+            dest: /boot/loader/loader.conf
+            content: |
+              default      arch.conf
+              timeout      4
+              console-mode max
+              editor       no
+        - ansible.builtin.copy:
+            dest: /boot/loader/entries/arch.conf
+            content: |
+              title   Arch Linux
+              linux   /vmlinuz-linux
+              initrd  /initramfs-linux.img
+              options root=UUID={{root_uuid}} rw
+    - name: Enable Network (?)
+      ansible.builtin.file:
+        src: /usr/lib/systemd/network/89-ethernet.network.example
+        dest: /etc/systemd/network/89-ethernet.network
+        state: link
+    - name: Oof
+      debug:
+        msg: '[WARNING]: This is a message from a user'
+      changed_when: true
